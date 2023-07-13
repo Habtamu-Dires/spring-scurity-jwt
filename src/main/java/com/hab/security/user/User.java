@@ -1,5 +1,6 @@
 package com.hab.security.user;
 
+import com.hab.security.token.Token;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,11 +26,16 @@ public class User implements UserDetails {
     private Integer id;
     private  String firstname;
     private  String lastname;
+
+    @Column(unique = true)
     private  String email;
     private String password ;
 
     @Enumerated(EnumType.STRING)
     private  Role role;
+
+    @OneToMany(mappedBy = "user")
+    private List<Token> tokens;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

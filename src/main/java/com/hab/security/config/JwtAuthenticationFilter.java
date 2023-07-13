@@ -1,5 +1,6 @@
 package com.hab.security.config;
 
+import com.hab.security.token.TokenRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter { // a filter 
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final TokenRepository tokenRepository;
 
     @Override
     protected void doFilterInternal(           // intercept request and response
@@ -40,7 +42,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter { // a filter 
             filterChain.doFilter(request, response);  // pass to the next filter
             return;
         }
-
         // extract jwt from authHeader, that is after Bearer (7) and userEmail from jwt token.
         jwt = authHeader.substring(7);
         userEmail = jwtService.extractUsername(jwt);
@@ -48,8 +49,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter { // a filter 
         if(userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null){  //the user not authenticated
             // get user detail from the database
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
-
-            if(jwtService.isTokenValid(jwt, userDetails)){
+            var isTokenValid = tokenRepository.findByToken(jwt)
+                    .map(t -> !t.isExpired() && !t.isRevoked())
+                    .orElse(false);
+            if(jwtService.isTokenValid(jwt, userDetails) && isTokenValid){
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,

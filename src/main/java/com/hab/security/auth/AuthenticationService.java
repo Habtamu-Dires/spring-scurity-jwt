@@ -1,6 +1,9 @@
 package com.hab.security.auth;
 
 import com.hab.security.config.JwtService;
+import com.hab.security.token.Token;
+import com.hab.security.token.TokenRepository;
+import com.hab.security.token.TokenType;
 import com.hab.security.user.Role;
 import com.hab.security.user.User;
 import com.hab.security.user.UserRepository;
@@ -17,6 +20,8 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
 
     private final UserRepository repository;
+    private final TokenRepository tokenRepository;
+
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
@@ -29,14 +34,19 @@ public class AuthenticationService {
                 .role(Role.USER)
                 .build();
 
-        repository.save(user);
+        var savedUser = repository.save(user);
 
         var jwtToken = jwtService.generateToken(user);
+
+        //save token
+        saveUserToken(savedUser, jwtToken);
 
         return AuthenticationResponse.builder()
                 .token(jwtToken)
                 .build();
     }
+
+
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         authenticationManager.authenticate(
@@ -49,10 +59,40 @@ public class AuthenticationService {
         var user = repository.findByEmail(request.getEmail())
                 .orElseThrow();
 
+        revokeAllUserToken(user);
+
         var jwtToken = jwtService.generateToken(user);
+
+        //save token
+        saveUserToken(user, jwtToken);
 
         return AuthenticationResponse.builder()
                 .token(jwtToken)
                 .build();
+    }
+
+    private void revokeAllUserToken(User user){
+        var validUserToken = tokenRepository.findAllValidTokenByUser(user.getId());
+        if(validUserToken.isEmpty())
+            return;
+        validUserToken.forEach(t -> {
+            t.setExpired(true);
+            t.setRevoked(true);
+        });
+
+        tokenRepository.saveAll(validUserToken);
+    }
+
+
+    private void saveUserToken(User user, String jwtToken) {
+        var token = Token.builder()
+                .user(user)
+                .token(jwtToken)
+                .tokenType(TokenType.BEARER)
+                .revoked(false)
+                .expired(false)
+                .build();
+
+        tokenRepository.save(token);
     }
 }
